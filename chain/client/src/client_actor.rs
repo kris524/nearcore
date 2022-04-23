@@ -822,6 +822,7 @@ impl Handler<Status> for ClientActor {
                         validators: validators.to_vec(),
                     }
                 },
+                chunk_info: self.client.detailed_upcoming_blocks_info_as_web(),
             })
         } else {
             None
@@ -1799,7 +1800,7 @@ impl ClientActor {
                 .unwrap_or(0),
             statistics,
         );
-        debug!(target: "stats", "{}", self.client.detailed_upcoming_blocks_info().unwrap_or(String::from("Upcoming block info failed.")));
+        debug!(target: "stats", "{}", self.client.detailed_upcoming_blocks_info_as_printable().unwrap_or(String::from("Upcoming block info failed.")));
     }
 }
 
