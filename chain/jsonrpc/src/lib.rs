@@ -1431,8 +1431,8 @@ fn get_cors(cors_allowed_origins: &[String]) -> Cors {
 lazy_static_include::lazy_static_include_str! {
     LAST_BLOCKS_HTML => "res/last_blocks.html",
     DEBUG_HTML => "res/debug.html",
+    NETWORK_INFO_HTML => "res/network_info.html",
     SYNC_INFO_HTML => "res/sync_info.html",
-    CHAIN_INFO_HTML => "res/chain_info.html",
     EPOCH_INFO_HTML => "res/epoch_info.html",
 }
 
@@ -1446,14 +1446,14 @@ async fn last_blocks_html() -> actix_web::Result<impl actix_web::Responder> {
     Ok(HttpResponse::Ok().body(*LAST_BLOCKS_HTML))
 }
 
+#[get("/debug/network_info")]
+async fn network_info_html() -> actix_web::Result<impl actix_web::Responder> {
+    Ok(HttpResponse::Ok().body(*NETWORK_INFO_HTML))
+}
+
 #[get("/debug/sync_info")]
 async fn sync_info_html() -> actix_web::Result<impl actix_web::Responder> {
     Ok(HttpResponse::Ok().body(*SYNC_INFO_HTML))
-}
-
-#[get("/debug/chain_info")]
-async fn chain_info_html() -> actix_web::Result<impl actix_web::Responder> {
-    Ok(HttpResponse::Ok().body(*CHAIN_INFO_HTML))
 }
 
 #[get("/debug/epoch_info")]
@@ -1524,8 +1524,8 @@ pub fn start_http(
             .service(web::resource("/debug/api/status").route(web::get().to(debug_handler)))
             .service(debug_html)
             .service(last_blocks_html)
+            .service(network_info_html)
             .service(sync_info_html)
-            .service(chain_info_html)
             .service(epoch_info_html)
     })
     .bind(addr)

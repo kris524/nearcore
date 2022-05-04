@@ -37,23 +37,43 @@
                 type: "GET",
                 url: "/debug/api/status",
                 success: data => {
-                    let sync_status = data.detailed_debug_status.sync_status;
-                    let network_info = data.detailed_debug_status.network_info;
-                    $('.js-sync-status').text(sync_status);
-                    $('.js-max-peers').text(network_info.peer_max_count);
-                    $('.js-num-peers').text(network_info.num_connected_peers);
-                    network_info.connected_peers.forEach(function(peer, index) {
-                        $('.js-tbody-peers').append($('<tr>')
-                            .append($('<td>').append(peer.addr))
-                            .append($('<td>').append(JSON.stringify(peer.account_id)))
-                            .append($('<td>').append(JSON.stringify(peer.height)))
-                            .append($('<td>').append(JSON.stringify(peer.tracked_shards)))
-                            .append($('<td>').append(JSON.stringify(peer.archival)))
+                    let head = data.detailed_debug_status.current_head_status;
+                    let header_head = data.detailed_debug_status.current_header_head_status;
+                    $('.js-current-head-hash').text(head.hash);
+                    $('.js-current-head-height').text(head.height);
+                    $('.js-current-header-head-hash').text(header_head.hash);
+                    $('.js-current-header-head-height').text(header_head.height);
+
+                    let orphans = data.detailed_debug_status.orphans;
+                    if (orphans.length > 0) {
+                        orphans.forEach((orphan, index) => {
+                            $('.js-tbody-orphans').append($('<tr>')
+                                .append($('<td>').append(orphan.hash))
+                                .append($('<td>').append(orphan.height))
+                            )
+                        });
+                    } else {
+                        $('.js-tbody-orphans').append($('<tr>')
+                            .append($('<td colspan="2">').append("(None)"))
                         )
-                    });
+                    }
+
+                    let blocks_with_missing_chunks = data.detailed_debug_status.blocks_with_missing_chunks;
+                    if (blocks_with_missing_chunks.length > 0) {
+                        blocks_with_missing_chunks.forEach((orphan, index) => {
+                            $('.js-tbody-blocks-with-missing-chunks').append($('<tr>')
+                                .append($('<td>').append(orphan.hash))
+                                .append($('<td>').append(orphan.height))
+                            )
+                        });
+                    } else {
+                        $('.js-tbody-blocks-with-missing-chunks').append($('<tr>')
+                            .append($('<td colspan="2">').append("(None)"))
+                        )
+                    }
                 },
                 dataType: "json",
-                error: function (errMsg, textStatus, errorThrown) {
+                error: (errMsg, textStatus, errorThrown) => {
                     alert("Failed: " + textStatus + " :" + errorThrown);
                 },
                 contentType: "application/json; charset=utf-8",
@@ -64,27 +84,46 @@
 </head>
 <body>
     <h1>
-        Welcome to the Sync Status page!
+        Welcome to the Sync Info page!
     </h1>
+    <h3>
+        <p>
+            Current head:
+            <span class="js-current-head-hash"></span>
+            @
+            <span class="js-current-head-height"></span>
+        </p>
+        <p>
+            Current header head:
+            <span class="js-current-header-head-hash"></span>
+            @
+            <span class="js-current-header-head-height"></span>
+        </p>
+    </h3>
     <h2>
         <p>
-            Current Sync Status:
-            <span class="js-sync-status"></span>
-        </p>
-        <p>
-            Number of peers: <span class="js-num-peers"></span>/<span class="js-max-peers"></span>
+            Orphan Pool
         </p>
     </h2>
-
     <table>
         <thead><tr>
-            <th>Address</th>
-            <th>Account ID</th>
+            <th>Hash</th>
             <th>Height</th>
-            <th>Tracked Shards</th>
-            <th>Archival</th>
         </tr></thead>
-        <tbody class="js-tbody-peers">
+        <tbody class="js-tbody-orphans">
+        </tbody>
+    </table>
+    <h2>
+        <p>
+            Missing Chunks Pool
+        </p>
+    </h2>
+    <table>
+        <thead><tr>
+            <th>Hash</th>
+            <th>Height</th>
+        </tr></thead>
+        <tbody class="js-tbody-blocks-with-missing-chunks">
         </tbody>
     </table>
 </body>
