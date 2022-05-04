@@ -6,7 +6,7 @@ use std::sync::Arc;
 use std::time::{Duration, Instant};
 
 use near_primitives::time::Clock;
-use tracing::{debug, error, info, warn};
+use tracing::{debug, error, info, info_span, trace_span, warn};
 
 use near_chain::chain::{
     ApplyStatePartsRequest, BlockCatchUpRequest, BlockMissingChunks, BlocksCatchUpState,
@@ -1066,6 +1066,7 @@ impl Client {
         provenance: Provenance,
         skip_produce_chunk: bool,
     ) {
+        let _span = trace_span!(target: "client", "on_block_accepted_with_optional_chunk_produce",block_hash=?block_hash, provenance=?provenance).entered();
         let block = match self.chain.get_block(&block_hash) {
             Ok(block) => block.clone(),
             Err(err) => {
@@ -1105,30 +1106,21 @@ impl Client {
             };
             self.chain.blocks_with_missing_chunks.prune_blocks_below_height(last_finalized_height);
 
-            let now = Clock::instant();
-            let result = if self.config.archive {
-                self.chain.clear_archive_data(self.config.gc.gc_blocks_limit)
-            } else {
-                let tries = self.runtime_adapter.get_tries();
-                self.chain.clear_data(tries, &self.config.gc)
-            };
-            if let Err(err) = result {
-                error!(target: "client", "Can't clear old data, {:?}", err);
-                debug_assert!(false);
-            };
-            let gc_time = now.elapsed();
-            metrics::GC_TIME.observe(gc_time.as_secs_f64());
-            // it's safe to unwrap here because block is already accepted
-            if block.header().height()
-                - self.runtime_adapter.get_epoch_start_height(block.hash()).unwrap()
-                < EPOCH_START_INFO_BLOCKS
             {
-                info!(
-                    "spent {:?} on gc after processing block {:?} at height {}",
-                    gc_time,
-                    block.hash(),
-                    block.header().height()
-                );
+                let _span = info_span!(target: "client", "GC collection",block_hash=?block.hash(), height=block.header().height()).entered();
+                let _gc_timer = metrics::GC_TIME.start_timer();
+
+                let result = if self.config.archive {
+                    self.chain.clear_archive_data(self.config.gc.gc_blocks_limit)
+                } else {
+                    let tries = self.runtime_adapter.get_tries();
+                    self.chain.clear_data(tries, &self.config.gc)
+                };
+                let _trace_span = trace_span!(target: "client", "GC collection trace",block_hash=?block.hash(), height=block.header().height()).entered();
+                if let Err(err) = result {
+                    error!(target: "client", "Can't clear old data, {:?}", err);
+                    debug_assert!(false);
+                };
             }
 
             if self.runtime_adapter.is_next_block_epoch_start(block.hash()).unwrap_or(false) {
@@ -1666,14 +1658,6 @@ impl Client {
                 let active_validator = self.active_validator(shard_id)?;
 
                 // If I'm not an active validator I should forward tx to next validators.
-                debug!(
-                    target: "client",
-                    "Recording a transaction. I'm {:?}, {} is_forwarded: {}",
-                    me,
-                    shard_id,
-                    is_forwarded
-                );
-                self.shards_mgr.insert_transaction(shard_id, tx.clone());
 
                 // Active validator:
                 //   possibly forward to next epoch validators
@@ -1681,14 +1665,22 @@ impl Client {
                 //   forward to current epoch validators,
                 //   possibly forward to next epoch validators
                 if active_validator {
+                    debug!(target: "client", account=?me, shard_id, is_forwarded, "Recording a transaction.");
+                    metrics::TRANSACTION_RECEIVED_VALIDATOR.inc();
+                    self.shards_mgr.insert_transaction(shard_id, tx.clone());
+
                     if !is_forwarded {
                         self.possibly_forward_tx_to_next_epoch(tx)?;
                     }
                     Ok(NetworkClientResponses::ValidTx)
                 } else if !is_forwarded {
+                    debug!(target: "client", shard_id, "Forwarding a transaction.");
+                    metrics::TRANSACTION_RECEIVED_NON_VALIDATOR.inc();
                     self.forward_tx(&epoch_id, tx)?;
                     Ok(NetworkClientResponses::RequestRouted)
                 } else {
+                    debug!(target: "client", shard_id, "Non-validator received a forwarded transaction, dropping it.");
+                    metrics::TRANSACTION_RECEIVED_NON_VALIDATOR_FORWARDED.inc();
                     Ok(NetworkClientResponses::NoResponse)
                 }
             }
