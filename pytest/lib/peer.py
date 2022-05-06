@@ -43,9 +43,12 @@ class Connection:
             # Connection was closed on the other side
             if response_raw is None:
                 return None
-
-            response = BinarySerializer(schema).deserialize(
-                response_raw, PeerMessage)
+            try:
+                response = BinarySerializer(schema).deserialize(
+                    response_raw, PeerMessage)
+            except IndexError:
+                # unparsable message, ignore.
+                continue
 
             if expected is None or response.enum == expected or (
                     callable(expected) and expected(response)):
